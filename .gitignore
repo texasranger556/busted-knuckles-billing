@@ -1,0 +1,12 @@
+# Personal planning notes – keep out of the public repo
+Prompt
+
+# OS / editor clutter
+.DS_Store
+Thumbs.db
+.vscode/
+*.swp
+
+# Never commit customer data backups
+BKB-*.zip
+*.csv
