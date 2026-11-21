@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { getSettings, saveSettings } from '../db.js';
-import { html, Header, Section, Field, NumField, Select, Toggle, Loading, resizeImage, toast, go } from '../ui.js';
+import { html, Header, Section, Field, NumField, Select, Toggle, Loading, resizeImage, toast, go, confirmDialog } from '../ui.js';
+import { checkForUpdates, getAppVersion } from '../update.js';
 import { ITEM_KINDS } from '../calc.js';
 
 export const TRAVEL_MODES = [
@@ -95,9 +96,40 @@ export function SettingsPage() {
     <//>
 
     <${Section} title="Backup">
-      <${NumField} label="Remind me to back up every" suffix="days" value=${s.backupReminderDays} onInput=${f('backupReminderDays')} />
+      <${Select} label="Backup reminder" value=${String(s.backupReminderDays)} onChange=${(v) => update({ backupReminderDays: Number(v) })}
+        options=${[{ value: '1', label: 'Daily, when something changed (recommended)' }, { value: '3', label: 'Every 3 days, when something changed' },
+          { value: '7', label: 'Weekly, when something changed' }, { value: '0', label: 'Never remind me' }]}
+        hint="New or changed invoices and payments are always flagged by the next day." />
       <button class="btn" onClick=${() => go('/backup')}>Backup & restore…</button>
     <//>
+    <${AppSection} />
     <p class="hint pad center">Busted Knuckles Billing · data is stored only on this device</p>
   </div>`;
+}
+
+function AppSection() {
+  const [version, setVersion] = useState(null);
+  const [checking, setChecking] = useState(false);
+  useEffect(() => { getAppVersion().then(setVersion); }, []);
+  const check = async () => {
+    setChecking(true);
+    const r = await checkForUpdates();
+    setChecking(false);
+    if (r.status === 'current') { if (r.version) setVersion(r.version); toast('You have the latest version 👍'); return; }
+    if (r.status === 'offline') return toast('No internet connection – try again when you have signal', 3500);
+    if (r.status === 'unsupported') return toast('Updates are only available in the installed app', 3500);
+    if (r.status === 'error') return toast('Could not check for updates: ' + r.message, 4500);
+    // A new version was downloaded and is ready.
+    if (await confirmDialog('Update ready', 'A new version has been downloaded. Restart the app to use it? Your data is not affected.', 'Restart now')) {
+      go('/'); // leave Settings first so any unsaved change is written
+      setTimeout(() => location.reload(), 400);
+    } else {
+      toast('The new version will be used next time you open the app', 3500);
+    }
+  };
+  return html`<${Section} title="App">
+    <div class="kv"><span>Installed version</span><span>${version ? version.replace(/^bkb-/, '') : '—'}</span></div>
+    <button class="btn block" disabled=${checking} onClick=${check}>${checking ? 'Checking…' : '🔄 Check for updates'}</button>
+    <p class="hint">Downloads the latest version from the website. Needs signal. Your data stays on this phone and is not changed.</p>
+  <//>`;
 }

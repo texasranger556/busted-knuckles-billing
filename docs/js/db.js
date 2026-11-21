@@ -53,8 +53,9 @@ export const DEFAULT_SETTINGS = {
   quoteDisclaimer: 'This is an estimate. Actual charges may vary based on conditions found during repair. Additional work will be discussed before proceeding.',
   invoiceNotes: 'Thank you for your business!',
   paymentInstructions: 'Payment accepted by cash, check, Venmo, or PayPal.',
-  backupReminderDays: 7,
+  backupReminderDays: 1, // remind when something changed and the last backup is at least this many days old
   lastBackupAt: null,
+  lastMediaBackupAt: null,
 };
 
 export async function getSettings() {
@@ -146,3 +147,24 @@ export function defaultContact(c) {
   const list = c?.contacts || [];
   return list.find((x) => x.isDefault) || list[0] || null;
 }
+
+// What changed since the last data backup (for the reminder banner).
+export async function changesSinceBackup(lastBackupAt) {
+  const since = lastBackupAt || '';
+  const out = {};
+  for (const t of ['customers', 'machines', 'quotes', 'jobs', 'invoices', 'payments']) {
+    out[t] = await db[t].where('updatedAt').above(since).count();
+  }
+  out.photos = await db.media.where('createdAt').above(since).count();
+  out.total = Object.values(out).reduce((a, b) => a + b, 0) - out.photos;
+  return out;
+}
+
+export function describeChanges(ch) {
+  const label = { invoices: 'invoice', payments: 'payment', jobs: 'job', quotes: 'quote', customers: 'customer', machines: 'machine' };
+  return Object.entries(label).filter(([k]) => ch[k] > 0).map(([k, l]) => `${ch[k]} ${l}${ch[k] > 1 ? 's' : ''}`).join(', ');
+}
+
+// Is this running as the installed home-screen app (vs. a browser tab)?
+export const isInstalled = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+export const isPhone = () => window.matchMedia?.('(pointer: coarse)').matches;

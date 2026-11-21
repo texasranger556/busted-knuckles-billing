@@ -73,10 +73,35 @@ Customers with an exemption certificate (e.g. farm equipment, REV-1220) can be m
 
 Data lives only on the phone. If the phone is lost or replaced, **the backup is the only copy**.
 
-1. Home → **💾 Backup** (the app reminds you weekly; change this in Settings).
-2. **Back up data** → choose **Drive** in the share menu to save it to Google Drive.
-   Files are named by date, e.g. `BKB-data-2026-11-20.zip`.
+> ⚠️ **On iPhone, deleting the app's home-screen icon deletes all of its data.** Back up first.
+>
+> ⚠️ **Always open the app from its icon, not from a Safari or Chrome tab.** A browser tab keeps
+> its own separate copy of the data, which the browser may erase. The app shows a red warning if it's opened in a tab.
+
+1. When something isn't backed up, the home screen shows a banner listing what changed (e.g. "2 invoices, 1 payment").
+   By default this appears daily, and only when something changed. Invoices and payments are always flagged by the next day.
+   Change it in **Settings → Backup reminder**.
+2. Tap the banner (or **💾 Backup → Back up data**). When the file is ready, tap **Save backup…** and choose **Drive**.
+   Files are named by date, e.g. `BKB-data-2026-11-20-1530.zip` (date and time).
 3. Every so often, also do **Back up photos & videos** (a separate, larger file: `BKB-photos-….zip`).
+
+### Automatically keep only the last N backups (Google Drive)
+A small script in **the user's own Google account** trims old backups once a day. It keeps the newest 14 data backups
+and 3 photo backups (adjustable) and moves older ones to the Drive **Trash**, which keeps them 30 more days before deleting.
+It finds backups by file name, so it doesn't matter which Drive folder they were saved to.
+
+One-time setup (about 5 minutes, on a computer, **signed in to the user's Google (Gmail) account**):
+1. Go to https://script.google.com → **New project**. Name it `BK Billing backup cleanup`.
+2. Delete the sample code and paste in the contents of [`tools/drive-backup-cleanup.gs`](tools/drive-backup-cleanup.gs).
+   Optionally change `KEEP_DATA_BACKUPS` / `KEEP_PHOTO_BACKUPS` at the top. Click **💾 Save**.
+3. In the function dropdown at the top, pick **`installDailyTrigger`** → **▶ Run**.
+4. Google asks for permission. Because this is the user's own script, Google shows **"Google hasn't verified this app"**.
+   Click **Advanced → Go to BK Billing backup cleanup (unsafe)** → **Allow**. The script runs only in the user's account
+   and doesn't share anything.
+5. Optional test: pick **`cleanUpBackups`** → **▶ Run** and check the log at the bottom
+   (e.g. "Data backups: kept 5, trashed 0").
+
+To change how many are kept later, edit the numbers and click Save. To stop it, open **⏰ Triggers** (left sidebar) and delete the trigger.
 
 **Restore / new phone:** install the app, then Backup → **Choose backup file(s)** and pick the newest
 `BKB-data-….zip` (and `BKB-photos-….zip` if you have one). ⚠️ Restoring **replaces** everything currently on that phone.
@@ -107,7 +132,9 @@ Phones cache the app for offline use, so they only pick up changes when the cach
 
 1. Edit the files in `docs/`.
 2. In [`docs/sw.js`](docs/sw.js), **bump `VERSION`** (e.g. `bkb-v1` → `bkb-v2`). If you add a new file, add it to `FILES`.
-3. Commit and push. Phones get the update the next time the app is opened with signal, and use it from the following launch.
+3. Commit and push. Phones pick up the update automatically the next time the app is opened with signal.
+   To get it right away, use **⚙️ Settings → App → 🔄 Check for updates**, which downloads it and offers to restart.
+   The installed version (e.g. `v3`) is shown there, so you can confirm which one a phone has.
 
 Updates never touch the data stored on the phone.
 

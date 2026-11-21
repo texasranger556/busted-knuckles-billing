@@ -248,3 +248,7 @@ details.more summary { cursor: pointer; color: var(--muted); font-weight: 600; p
 input[type="date"], input[type="month"] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; display: block; }
 .steps { padding-left: 22px; margin: 6px 0 12px; }
 .steps li { margin: 6px 0; }
+.banner.danger { background: color-mix(in srgb, var(--danger) 18%, var(--card)); color: var(--ink); cursor: default; font-weight: 400; }
+.banner u { font-weight: 700; }
+.safety { padding-left: 18px; margin: 4px 0; }
+.safety li { margin: 8px 0; }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'preact/hooks';
-import { db, DATA_TABLES, getSettings, saveSettings, today, now, useLive, useSettings } from '../db.js';
-import { html, Header, Section, Loading, toast, confirmDialog } from '../ui.js';
+import { db, DATA_TABLES, getSettings, saveSettings, today, now, useLive, useSettings, changesSinceBackup, describeChanges, isInstalled } from '../db.js';
+import { html, Header, Section, Loading, toast, confirmDialog, openModal, Modal } from '../ui.js';
 import { fmtDate } from '../pdf.js';
 import { shareFiles, downloadBlob } from '../share.js';
 
@@ -30,11 +30,40 @@ export async function buildMediaZip() {
   return zip.generateAsync({ type: 'blob', compression: 'STORE' }); // photos/videos are already compressed
 }
 
-async function saveOut(blob, name) {
-  const file = new File([blob], name, { type: 'application/zip' });
-  const r = await shareFiles([file], name, '');
-  if (r === null) { downloadBlob(file, name); return true; }
-  return r;
+// Step 1 builds the zip; step 2 is a separate tap that opens the share menu (iPhone requires the
+// share to happen right after a tap, and zipping photos can take several seconds).
+function SaveBackupModal({ close, kind }) {
+  const [file, setFile] = useState(null);
+  const [err, setErr] = useState(null);
+  const t = new Date();
+  const hhmm = String(t.getHours()).padStart(2, '0') + String(t.getMinutes()).padStart(2, '0');
+  const name = `BKB-${kind === 'media' ? 'photos' : 'data'}-${today()}-${hhmm}.zip`;
+  useEffect(() => {
+    (kind === 'media' ? buildMediaZip() : buildDataZip())
+      .then((blob) => setFile(new File([blob], name, { type: 'application/zip' })))
+      .catch((e) => setErr(e.message));
+  }, []);
+  const save = async () => {
+    try {
+      const r = await shareFiles([file], name, '');
+      if (r === null) { downloadBlob(file, name); close(true); } else if (r) close(true);
+    } catch (e) { setErr(e.message); }
+  };
+  return html`<${Modal} title=${kind === 'media' ? 'Back up photos & videos' : 'Back up data'} close=${close}>
+    ${err ? html`<p class="error">Backup failed: ${err}</p>`
+      : !file ? html`<p>Preparing backup…</p>`
+        : html`<p><strong>${name}</strong> (${mb(file.size)}) is ready.</p>
+          <p class="hint">Tap below, then choose <strong>Drive</strong> (or <strong>Save to Files</strong>).</p>`}
+    <button class="btn primary block big" disabled=${!file} onClick=${save}>${file ? '💾 Save backup…' : 'Preparing…'}</button>
+  <//>`;
+}
+
+export async function startBackup(kind = 'data') {
+  const ok = await openModal(SaveBackupModal, { kind });
+  if (!ok) return false;
+  await saveSettings({ ...(await getSettings()), [kind === 'media' ? 'lastMediaBackupAt' : 'lastBackupAt']: now() });
+  toast(kind === 'media' ? 'Photo backup saved' : 'Backup saved');
+  return true;
 }
 
 export async function restoreZip(file) {
@@ -69,23 +98,14 @@ export function BackupPage() {
     const media = await db.media.toArray();
     return { count: media.length, bytes: media.reduce((a, m) => a + (m.blob?.size || 0), 0) };
   }, []);
+  const changes = useLive(async () => changesSinceBackup((await getSettings()).lastBackupAt), []);
   const [busy, setBusy] = useState('');
   const [persisted, setPersisted] = useState(null);
   useEffect(() => { navigator.storage?.persisted?.().then(setPersisted).catch(() => {}); }, []);
   if (!settings || !stats) return html`<${Loading} />`;
 
-  const backupData = async () => {
-    setBusy('Preparing data backup…');
-    try {
-      const ok = await saveOut(await buildDataZip(), `BKB-data-${today()}.zip`);
-      if (ok) { await saveSettings({ ...(await getSettings()), lastBackupAt: now() }); toast('Backup saved'); }
-    } catch (e) { toast('Backup failed: ' + e.message, 4000); } finally { setBusy(''); }
-  };
-  const backupMedia = async () => {
-    setBusy(`Zipping ${stats.count} photos/videos…`);
-    try { if (await saveOut(await buildMediaZip(), `BKB-photos-${today()}.zip`)) toast('Photo backup saved'); }
-    catch (e) { toast('Photo backup failed: ' + e.message, 4000); } finally { setBusy(''); }
-  };
+  const backupData = () => startBackup('data');
+  const backupMedia = () => startBackup('media');
   const restore = async (e) => {
     const files = [...e.currentTarget.files]; e.currentTarget.value = '';
     if (!files.length) return;
@@ -102,19 +122,25 @@ export function BackupPage() {
     <${Header} title="Backup & restore" back="/" />
     ${busy && html`<div class="banner info">${busy}</div>`}
     <${Section} title="Back up">
-      <p>Last backup: <strong>${settings.lastBackupAt ? fmtDate(settings.lastBackupAt.slice(0, 10)) : 'never'}</strong></p>
+      <p>Last data backup: <strong>${settings.lastBackupAt ? fmtDate(settings.lastBackupAt.slice(0, 10)) : 'never'}</strong>
+        ${changes?.total > 0 ? html`<br /><span class="overdue">Not backed up yet: ${describeChanges(changes)}</span>` : settings.lastBackupAt ? html`<br /><span class="hint">✅ Everything is backed up</span>` : ''}</p>
       <p class="hint">Tap a button, then choose <strong>Drive</strong> (or “Save to Files”) in the share menu. Keep a couple of weeks of backups.</p>
       <button class="btn primary block big" disabled=${!!busy} onClick=${backupData}>💾 Back up data</button>
       <p class="hint">Customers, machines, quotes, jobs, invoices, payments and settings. Small file.</p>
       <button class="btn block" disabled=${!!busy || !stats.count} onClick=${backupMedia}>🖼 Back up photos & videos (${stats.count}, ${mb(stats.bytes)})</button>
-      <p class="hint">A separate, larger file. You only need to do this every so often.</p>
+      <p class="hint">A separate, larger file. Last photo backup: ${settings.lastMediaBackupAt ? fmtDate(settings.lastMediaBackupAt.slice(0, 10)) : 'never'}${changes?.photos ? ` · ${changes.photos} new since last data backup` : ''}.</p>
     <//>
     <${Section} title="Restore">
       <p class="hint">Choose a <code>BKB-data-….zip</code> and/or <code>BKB-photos-….zip</code> file. Use this when moving to a new phone.</p>
       <label class=${'btn block' + (busy ? ' disabled' : '')}>📂 Choose backup file(s)…<input type="file" accept=".zip,application/zip" multiple hidden onChange=${restore} /></label>
     <//>
-    <${Section} title="Storage">
-      <p class="hint">${persisted ? '✅ This browser has agreed to keep your data.' : 'For best results on iPhone, open the app from the Home Screen icon (Share → Add to Home Screen).'} Your data stays on this phone. It is not uploaded anywhere.</p>
+    <${Section} title="Keeping your data safe">
+      <ul class="safety">
+        <li>${isInstalled() ? '✅ Running as the installed app.' : '⚠️ Running in a browser tab. Install it: Share → Add to Home Screen, then always use the icon.'}</li>
+        <li>${persisted ? '✅ The phone has agreed not to clear this app\'s data to free up space.' : '⚠️ The phone has not promised to keep this data. Backups are extra important.'}</li>
+        <li>⚠️ <strong>Deleting the app icon deletes all of its data.</strong> Back up first.</li>
+        <li>Your data is stored only on this phone, so a lost or broken phone means relying on your latest backup.</li>
+      </ul>
     <//>
   </div>`;
 }

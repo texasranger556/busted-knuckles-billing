@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
-import { db, alive, useLive, useSettings, today, machineShort } from '../db.js';
+import { db, alive, useLive, useSettings, today, machineShort, getSettings, changesSinceBackup, describeChanges, isInstalled, isPhone } from '../db.js';
+import { startBackup } from './backup.js';
 import { html, Header, Section, Loading, go, Pill, Segmented } from '../ui.js';
 import { docTotals, money, num, round2, invoicesWithBalance, daysBetween } from '../calc.js';
 import { fmtDate } from '../pdf.js';
@@ -60,9 +61,15 @@ export function QuotesNoJobList({ list, limit }) {
 export function HomePage() {
   const settings = useSettings();
   const o = useLive(overview, []);
-  if (!settings || !o) return html`<${Loading} />`;
+  const changes = useLive(async () => changesSinceBackup((await getSettings()).lastBackupAt), []);
+  if (!settings || !o || !changes) return html`<${Loading} />`;
   const days = settings.lastBackupAt ? daysBetween(settings.lastBackupAt.slice(0, 10), today()) : null;
-  const backupDue = Number(settings.backupReminderDays) > 0 && (days === null ? o.quotes.length + o.jobs.length > 0 : days >= settings.backupReminderDays);
+  const remindDays = Number(settings.backupReminderDays);
+  // Remind only when something changed, and the last backup is old enough (daily by default).
+  // Money records (invoices/payments) never wait more than a day.
+  const moneyChanged = changes.invoices + changes.payments > 0;
+  const backupDue = remindDays > 0 && changes.total > 0 && (days === null || days >= remindDays || (moneyChanged && days >= 1));
+  const inBrowserTab = isPhone() && !isInstalled();
   const owed = round2(o.unpaid.reduce((a, i) => a + i.balance, 0));
   const setupNeeded = !settings.phone && !settings.email;
   return html`<div class="page home">
@@ -72,7 +79,9 @@ export function HomePage() {
       <button class="icon-btn" aria-label="Settings" onClick=${() => go('/settings')}>⚙️</button>
     </header>
     ${setupNeeded && html`<button class="banner info" onClick=${() => go('/settings')}>👋 Start here: add your business info, logo, and rates in Settings ›</button>`}
-    ${backupDue && html`<button class="banner warn" onClick=${() => go('/backup')}>💾 ${days === null ? 'You haven’t backed up yet' : `Last backup was ${days} days ago`} – back up now ›</button>`}
+    ${inBrowserTab && html`<div class="banner danger">⚠️ <strong>You're in a browser tab, not the installed app.</strong> Data entered here is kept separately and can be erased by the browser.
+      Install it: tap <strong>Share → Add to Home Screen</strong> (iPhone) or <strong>⋮ → Install app</strong> (Android), then always open it from the icon.</div>`}
+    ${backupDue && html`<button class="banner warn" onClick=${() => startBackup('data')}>💾 <strong>Not backed up:</strong> ${describeChanges(changes)}${days === null ? ' (never backed up)' : days > 0 ? ` · last backup ${days} day${days > 1 ? 's' : ''} ago` : ''}<br /><u>Tap to back up now</u></button>`}
 
     <div class="big-btns">
       <button class="big-btn" onClick=${() => startQuote()}><span>📝</span>New Quote</button>
