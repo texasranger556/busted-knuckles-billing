@@ -246,3 +246,5 @@ details.more summary { cursor: pointer; color: var(--muted); font-weight: 600; p
 /* Keep inputs (especially iPhone date pickers) inside their grid columns */
 .grid2 > *, .field, .affix input { min-width: 0; }
 input[type="date"], input[type="month"] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; display: block; }
+.steps { padding-left: 22px; margin: 6px 0 12px; }
+.steps li { margin: 6px 0; }

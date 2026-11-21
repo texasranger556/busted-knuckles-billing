@@ -1,10 +1,10 @@
 // Offline support: cache the app files, serve them cache-first.
 // Bump VERSION whenever any app file changes so phones pick up the update.
-const VERSION = 'bkb-v1';
+const VERSION = 'bkb-v2';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
-  'js/app.js', 'js/db.js', 'js/calc.js', 'js/ui.js', 'js/pdf.js', 'js/share.js',
+  'js/app.js', 'js/db.js', 'js/calc.js', 'js/ui.js', 'js/pdf.js', 'js/share.js', 'js/contacts.js',
   'js/pages/settings.js', 'js/pages/customers.js', 'js/pages/quotes.js', 'js/pages/jobs.js',
   'js/pages/invoices.js', 'js/pages/payments.js', 'js/pages/reports.js', 'js/pages/backup.js',
   'js/vendor/preact.module.js', 'js/vendor/hooks.module.js', 'js/vendor/htm.module.js', 'js/vendor/dexie.mjs',

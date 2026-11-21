@@ -31,6 +31,18 @@ The app must be opened once with an internet connection. After that it works off
 Tap **⚙️ Settings** and fill in the business name, logo, phone, email, address, labor rates,
 travel method, sales tax rate (PA default 6%), and payment terms. Everything saves automatically.
 
+**iPhone only: let the app read your contacts (recommended).** Open iPhone **Settings → Apps → Safari →
+Advanced → Feature Flags**, turn on **Contact Picker API**, then close and reopen the app.
+Android works without this step.
+
+### Adding customers from your phone's contacts
+- **New customer → 📇 Fill in from phone contacts** fills in the company, address, main phone,
+  and the contact's name, title, mobile and email from one contact.
+- On a customer's page, **Contacts → 📇 From phone contacts** adds one or several people at once.
+- Without the contact picker, share the contact from the Contacts app (**Share Contact → Save to Files**)
+  and choose that `.vcf` file in the app.
+- Details are **copied** into the app. Later changes in the phone's Contacts app don't carry over.
+
 ---
 
 ## Everyday use

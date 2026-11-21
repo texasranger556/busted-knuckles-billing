@@ -1,5 +1,5 @@
 import { db, uid, alive, useLive, softDelete, useSettings, machineLabel } from '../db.js';
-import { html, Header, Section, Field, NumField, Select, Toggle, Loading, Missing, SearchList, useDoc, go, newCustomer, newMachine, MachineFields, Gallery, confirmDialog, Pill, toast } from '../ui.js';
+import { html, Header, Section, Field, NumField, Select, Toggle, Loading, Missing, SearchList, useDoc, go, newCustomer, newMachine, MachineFields, Gallery, confirmDialog, Pill, toast, PhoneContactButton } from '../ui.js';
 import { money } from '../calc.js';
 import { fmtDate } from '../pdf.js';
 import { TRAVEL_MODES } from './settings.js';
@@ -30,6 +30,15 @@ export function CustomerPage({ id }) {
   const contacts = c.contacts || [];
   const setContact = (cid, patch) => update({ contacts: contacts.map((x) => (x.id === cid ? { ...x, ...patch } : x)) });
   const makeDefault = (cid) => update({ contacts: contacts.map((x) => ({ ...x, isDefault: x.id === cid })) });
+  const importContacts = (list) => {
+    const hadDefault = contacts.some((x) => x.isDefault);
+    const added = list.map((p, i) => ({ id: uid(), name: p.name || p.org || '', role: p.role, phone: p.phone, email: p.email, isDefault: !hadDefault && i === 0 }));
+    const patch = { contacts: [...contacts, ...added] };
+    const withAddr = list.find((p) => p.address);
+    if (!c.address && withAddr) patch.address = withAddr.address;
+    update(patch);
+    toast(`Added ${added.length} contact${added.length > 1 ? 's' : ''}`);
+  };
   const addContact = () => update({ contacts: [...contacts, { id: uid(), name: '', role: '', phone: '', email: '', isDefault: contacts.length === 0 }] });
   const delContact = async (cid) => {
     if (!(await confirmDialog('Remove contact?', 'This contact will be removed from the customer.', 'Remove', true))) return;
@@ -62,6 +71,7 @@ export function CustomerPage({ id }) {
     <//>
 
     <${Section} title="Contacts" right=${html`<button class="btn small" onClick=${addContact}>+ Add</button>`}>
+      <div class="row-btns left"><${PhoneContactButton} multiple onContacts=${importContacts} /></div>
       ${contacts.length === 0 && html`<p class="empty small">No contacts yet.</p>`}
       ${contacts.map((x) => html`<div class="contact" key=${x.id}>
         <div class="contact-head">

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import htm from 'htm';
 import { db, put, uid, now, useLive, alive, machineLabel } from './db.js';
 import { ITEM_KINDS, lineAmount, money, num, newItem, totals as calcTotals } from './calc.js';
+import { canPickContacts, pickPhoneContacts, readVCardFiles } from './contacts.js';
 
 export const html = htm.bind(h);
 
@@ -325,9 +326,69 @@ export function SearchList({ items, render: renderItem, onPick, placeholder = 'S
   </div>`;
 }
 
+// ---------- Phone contacts ----------
+const isIPhone = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+function VcfInput({ onContacts, children, className = 'btn small' }) {
+  return html`<label class=${className}>${children}<input type="file" accept=".vcf,text/vcard,text/x-vcard" multiple hidden
+    onChange=${async (e) => {
+      const files = [...e.currentTarget.files]; e.currentTarget.value = '';
+      if (!files.length) return;
+      try {
+        const list = await readVCardFiles(files);
+        if (!list.length) return toast('No contacts found in that file');
+        onContacts(list);
+      } catch (err) { toast('Could not read contact file'); }
+    }} /></label>`;
+}
+
+function ContactHelpModal({ close, onContacts }) {
+  return html`<${Modal} title="Get details from your contacts" close=${close}>
+    ${isIPhone() ? html`
+      <h4>Option 1 – Turn on the contact picker (one time)</h4>
+      <ol class="steps">
+        <li>Open the iPhone <strong>Settings</strong> app → <strong>Apps</strong> → <strong>Safari</strong>.</li>
+        <li>Scroll down to <strong>Advanced</strong> → <strong>Feature Flags</strong>.</li>
+        <li>Turn on <strong>Contact Picker API</strong>.</li>
+        <li>Close and reopen this app. The 📇 button will then open your contacts directly.</li>
+      </ol>
+      <h4>Option 2 – Share a contact card</h4>
+      <ol class="steps">
+        <li>In the <strong>Contacts</strong> app, open the person → <strong>Share Contact</strong> → <strong>Save to Files</strong>.</li>
+        <li>Come back here and tap the button below, then pick that file.</li>
+      </ol>`
+    : html`<p>Your browser can't open the contact list directly. In your Contacts app, share the contact as a file (.vcf), save it, then pick it below.</p>`}
+    <${VcfInput} className="btn primary block" onContacts=${(list) => { close(); onContacts(list); }}>📂 Choose contact card (.vcf)…<//>
+  <//>`;
+}
+
+// Button that pulls one or more contacts from the phone. onContacts receives [{ name, org, role, phone, email, address }].
+export function PhoneContactButton({ onContacts, multiple = false, label = '📇 From phone contacts', className = 'btn small' }) {
+  const click = async () => {
+    if (!canPickContacts()) return openModal(ContactHelpModal, { onContacts });
+    try {
+      const list = await pickPhoneContacts(multiple);
+      if (list.length) onContacts(list);
+    } catch (e) {
+      if (e?.name !== 'AbortError') { console.warn(e); openModal(ContactHelpModal, { onContacts }); }
+    }
+  };
+  return html`<button type="button" class=${className} onClick=${click}>${label}</button>`;
+}
+
 function NewCustomerModal({ close }) {
   const [c, setC] = useState({ name: '', phone: '', address: '', contactName: '', contactRole: '', contactPhone: '', contactEmail: '' });
   const s = (k) => (v) => setC({ ...c, [k]: v });
+  const fromPhone = ([p]) => setC((cur) => ({
+    ...cur,
+    name: cur.name || p.org || '',
+    address: cur.address || p.address || '',
+    phone: cur.phone || p.workPhone || (!p.name ? p.phone : '') || '',
+    contactName: p.name || cur.contactName,
+    contactRole: p.role || cur.contactRole,
+    contactPhone: p.name ? p.phone || cur.contactPhone : cur.contactPhone,
+    contactEmail: p.email || cur.contactEmail,
+  }));
   const save = async () => {
     if (!c.name.trim()) return toast('Business name is required');
     const contacts = c.contactName.trim() ? [{ id: uid(), name: c.contactName, role: c.contactRole, phone: c.contactPhone, email: c.contactEmail, isDefault: true }] : [];
@@ -335,6 +396,7 @@ function NewCustomerModal({ close }) {
     close(rec);
   };
   return html`<${Modal} title="New customer" close=${close}>
+    <${PhoneContactButton} className="btn block" label="📇 Fill in from phone contacts" onContacts=${fromPhone} />
     <${Field} label="Business name" required value=${c.name} onInput=${s('name')} />
     <${Field} label="Main phone" type="tel" value=${c.phone} onInput=${s('phone')} />
     <${Field} label="Address" multiline rows="2" value=${c.address} onInput=${s('address')} />
